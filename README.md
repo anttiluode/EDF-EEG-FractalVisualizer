@@ -9,7 +9,7 @@ Real-time EEG visualization tool that displays brain wave frequency bands as dyn
 
 Install dependencies:
 ```bash
-pip install numpy pillow mne scipy opencv-python
+pip install numpy pillow mne scipy opencv-python etc. 
 ```
 
 ## Usage
