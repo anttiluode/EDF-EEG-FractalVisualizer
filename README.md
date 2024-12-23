@@ -18,14 +18,26 @@ A Python application that generates fractal-like visualizations from EEG data or
 
 ### Dependencies
 ```
-numpy
-tkinter
-pillow
-mne
-scipy
-opencv-python
-pywt
+# Core dependencies
+numpy>=1.21.0
+scipy>=1.7.0
+mne>=1.0.0
+opencv-python>=4.5.0
+PyWavelets>=1.1.0
+
+# GUI and Image Processing
+tkinter  # Usually comes with Python
+Pillow>=8.0.0
+matplotlib>=3.4.0
+
+# Optional but recommended
+pandas>=1.3.0  # For data handling
+scikit-learn>=0.24.0  # For additional processing
 ```
+
+Install using pip: 
+
+pip install numpy scipy mne opencv-python PyWavelets Pillow matplotlib pandas scikit-learn
 
 ### Usage
 1. Run the EEG Visualizer:
@@ -52,13 +64,29 @@ A deep learning-based application that attempts to reverse the fractal transform
 
 ### Dependencies
 ```
-torch
-torchvision
-pillow
-scikit-learn
-numpy
-tkinter
+# Deep Learning Framework
+torch>=1.9.0
+torchvision>=0.10.0
+
+# Data Processing
+numpy>=1.21.0
+scipy>=1.7.0
+Pillow>=8.0.0
+scikit-learn>=0.24.0
+
+# GUI
+tkinter  # Usually comes with Python
+matplotlib>=3.4.0  # For visualization
+
+# Utilities
+tqdm>=4.62.0  # For progress bars
+pandas>=1.3.0  # For data management
+logging  # Built into Python
 ```
+
+Install using: 
+
+pip install torch torchvision numpy scipy Pillow scikit-learn matplotlib tqdm pandas
 
 ### Usage
 1. Run the Fractal Decoder:
