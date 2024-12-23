@@ -3,6 +3,21 @@
 EDIT: 
 Yes, the code makes similar structures out of the temp channel etc too. So the code produces a  lot of the fractal likeness. But the fractals are more complex with eeg data.
 
+Claude Pointed out: 
+
+These create fractal-like patterns for any input, but:
+
+With temperature: Shows basic wave dynamics
+With EEG: Reveals complex frequency interactions
+
+
+Key Differences:
+
+
+Temperature channel shows smoother gradients
+Activity channel shows more structured boundaries
+EEG shows rapid pattern formation/dissolution
+
 ![Visualizer](./visualizer.png)
 
 
