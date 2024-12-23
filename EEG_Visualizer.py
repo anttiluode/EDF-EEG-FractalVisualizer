@@ -11,7 +11,7 @@ import time
 import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
-
+import pywt
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -53,30 +53,150 @@ class FrequencyBandProcessor:
                               X - X[self.center_x, self.center_y])
     
     def update(self, amplitude: float, dt: float) -> np.ndarray:
-        # Natural decay
-        self.state *= (1 - self.decay_rate * dt)
+        try:
+            # Natural decay
+            self.state *= (1 - self.decay_rate * dt)
+
+            # Update phase with frequency-dependent speed
+            self.phase += dt * 2 * np.pi * self.wave_speed
+
+            # Generate wave patterns
+            radial_wave = np.sin(self.distance - self.phase) * np.exp(-self.distance * 0.15)
+            spiral_wave = np.sin(self.distance + self.angle - self.phase) * np.exp(-self.distance * 0.1)
+
+            # Combine waves with amplitude modulation
+            wave = (radial_wave * 0.6 + spiral_wave * 0.4) * amplitude
+
+            # Add momentum for smooth transitions
+            self.momentum = 0.95 * self.momentum + 0.05 * (wave - self.state)
+            self.state += self.momentum * dt * 3.0
+
+            # Add subtle spatial filtering for smoothness
+            kernel_size = max(3, self.size // 16)
+            if kernel_size % 2 == 0:
+                kernel_size += 1
+            self.state = cv2.GaussianBlur(self.state, (kernel_size, kernel_size), 0)
+
+            assert self.state.shape == (self.size, self.size), f"State shape mismatch: {self.state.shape}"
+            return self.state
+        except Exception as e:
+            logger.error(f"Error in FrequencyBandProcessor.update: {e}")
+            raise
+
+
+
+
+class WaveletProcessor:
+    """Handles Wavelet Decomposition and Reconstruction for EEG signals"""
+    def __init__(self, wavelet='db4', levels=5):
+        """
+        Initialize the WaveletProcessor with the specified wavelet type and number of levels.
+
+        :param wavelet: The wavelet type (e.g., 'db4' for Daubechies 4).
+        :param levels: Number of decomposition levels.
+        """
+        self.wavelet = wavelet
+        self.levels = levels
+
+    def decompose(self, signal):
+        """Decomposes a signal using wavelet transform.
         
-        # Update phase with frequency-dependent speed
-        self.phase += dt * 2 * np.pi * self.wave_speed
+        :param signal: 1D array of the signal to decompose.
+        :return: List of wavelet coefficients.
+        """
+        coeffs = pywt.wavedec(signal, self.wavelet, level=self.levels)
+        return coeffs
+
+    def reconstruct(self, coeffs):
+        """Reconstructs a signal from wavelet coefficients.
         
-        # Generate wave patterns
-        radial_wave = np.sin(self.distance - self.phase) * np.exp(-self.distance * 0.15)
-        spiral_wave = np.sin(self.distance + self.angle - self.phase) * np.exp(-self.distance * 0.1)
+        :param coeffs: List of wavelet coefficients.
+        :return: Reconstructed signal as a 1D array.
+        """
+        reconstructed_signal = pywt.waverec(coeffs, self.wavelet)
+        return reconstructed_signal
+
+    def filter_coeffs(self, coeffs, threshold=0.2):
+        """Applies a threshold filter to wavelet coefficients.
         
-        # Combine waves with amplitude modulation
-        wave = (radial_wave * 0.6 + spiral_wave * 0.4) * amplitude
-        
-        # Add momentum for smooth transitions
-        self.momentum = 0.95 * self.momentum + 0.05 * (wave - self.state)
-        self.state += self.momentum * dt * 3.0
-        
-        # Add subtle spatial filtering for smoothness
-        kernel_size = max(3, self.size // 16)
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        self.state = cv2.GaussianBlur(self.state, (kernel_size, kernel_size), 0)
-        
-        return self.state
+        :param coeffs: List of wavelet coefficients.
+        :param threshold: Threshold for soft filtering (fraction of max coefficient).
+        :return: Filtered wavelet coefficients.
+        """
+        filtered_coeffs = []
+        for coeff in coeffs:
+            filtered_coeffs.append(pywt.threshold(coeff, threshold * np.max(coeff), mode='soft'))
+        return filtered_coeffs
+
+class ImageBacktracker:
+    """Allows for input images to be processed and backtracked"""
+    def __init__(self, processors):
+        """
+        Initialize the ImageBacktracker.
+
+        :param processors: A dictionary of FrequencyBandProcessor instances (e.g., theta, alpha, beta, gamma).
+        """
+        self.processors = processors
+
+
+    def process_image(self, image, amplitude=1.0, dt=0.033):
+        try:
+            # Ensure the image is grayscale and 2D
+            logger.debug(f"Original image shape: {image.shape}")
+            if len(image.shape) == 3:  # Convert RGB to grayscale if needed
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            elif len(image.shape) != 2:
+                raise ValueError("Input image must be a 2D grayscale array.")
+
+            logger.debug(f"Grayscale image shape: {image.shape}")
+
+            # Resize the image to match the processor resolution
+            resolution = self.processors['theta'].size  # Assume all processors use the same resolution
+            input_image = cv2.resize(image, (resolution, resolution))
+            logger.debug(f"Resized image shape: {input_image.shape}")
+
+            # Normalize the image to [0, 1]
+            img_min, img_max = input_image.min(), input_image.max()
+            if img_max > img_min:
+                input_image = (input_image - img_min) / (img_max - img_min)
+            else:
+                input_image = np.zeros_like(input_image)  # Handle uniform images
+            logger.debug(f"Normalized image min: {input_image.min()}, max: {input_image.max()}")
+
+            # Collect 2D states from processors
+            processed_states = []
+            for band, processor in self.processors.items():
+                state = processor.update(amplitude, dt)  # This returns a 2D array
+                if state.shape != (resolution, resolution):
+                    raise ValueError(f"Processor {band} output shape mismatch: {state.shape}")
+                logger.debug(f"Processor {band} output state shape: {state.shape}")
+                processed_states.append(state)
+
+            # Combine processed states into a single 2D array
+            combined_state = np.sum(processed_states, axis=0)
+            logger.debug(f"Combined state shape: {combined_state.shape}")
+
+            # Backtrack: Convert the combined state into an interpretable image
+            backtracked_image = self.backtrack_image(combined_state)
+            logger.debug(f"Backtracked image shape: {backtracked_image.shape}")
+            return backtracked_image
+
+        except Exception as e:
+            logger.error(f"Error in process_image: {e}")
+            raise
+
+
+    def backtrack_image(self, combined_state):
+        try:
+            logger.debug(f"Input to backtrack_image shape: {combined_state.shape}")
+            # Normalize the state to [0, 255]
+            normalized_state = (combined_state - combined_state.min()) / (combined_state.max() - combined_state.min() + 1e-8)
+            backtracked_image = (normalized_state * 255).astype(np.uint8)
+            return backtracked_image
+        except Exception as e:
+            logger.error(f"Error in backtrack_image: {e}")
+            raise
+
 
 class EEGProcessor:
     """Handles EEG data processing"""
@@ -92,7 +212,10 @@ class EEGProcessor:
         self.duration = 0
         self.window_size = 1.0  # 1 second window - increased for stable filtering
         self.min_samples = 100  # Minimum samples needed for processing
-    
+        
+        # Initialize WaveletProcessor
+        self.wavelet_processor = WaveletProcessor()
+
     def load_file(self, filepath: str) -> bool:
         try:
             self.raw = mne.io.read_raw_edf(filepath, preload=True)
@@ -102,54 +225,77 @@ class EEGProcessor:
         except Exception as e:
             logger.error(f"Failed to load EEG file: {e}")
             return False
-    
+
     def get_data(self, channel: int, start_time: float) -> Optional[np.ndarray]:
         if self.raw is None:
             return None
-        
+
         try:
             # Calculate sample points
             start_sample = int(start_time * self.sfreq)
             samples_needed = max(int(self.window_size * self.sfreq), self.min_samples)
             end_sample = start_sample + samples_needed
-            
+
             # Handle end of file
             if end_sample >= self.raw.n_times:
                 start_sample = 0
                 end_sample = samples_needed
-            
+
             # Get data
             data, _ = self.raw[channel, start_sample:end_sample]
             return data[0]
-            
+
         except Exception as e:
             logger.error(f"Error getting EEG data: {e}")
             return None
-    
+
     def process_bands(self, data: np.ndarray) -> Dict[str, float]:
         if data is None or len(data) < self.min_samples:
             return {band: 0.0 for band in self.freq_bands}
-            
+
         try:
             # Normalize data
             data = (data - np.mean(data)) / (np.std(data) + 1e-6)
-            
+
             results = {}
             for band_name, (low, high) in self.freq_bands.items():
                 # Bandpass filter
                 nyq = self.sfreq / 2
-                b, a = butter(4, [low/nyq, high/nyq], btype='band')
+                b, a = butter(4, [low / nyq, high / nyq], btype='band')
                 filtered = filtfilt(b, a, data)
-                
+
                 # Get amplitude envelope
                 analytic = hilbert(filtered)
                 amplitude = np.abs(analytic)
                 results[band_name] = np.mean(amplitude)
-            
+
             return results
         except Exception as e:
             logger.error(f"Error processing frequency bands: {e}")
             return {band: 0.0 for band in self.freq_bands}
+
+    def process_with_wavelet(self, data: np.ndarray) -> np.ndarray:
+        """
+        Process the EEG data with wavelet decomposition, filtering, and reconstruction.
+
+        :param data: 1D array of EEG signal data.
+        :return: Reconstructed signal after wavelet processing.
+        """
+        if data is None or len(data) < self.min_samples:
+            return np.zeros_like(data)
+
+        try:
+            # Normalize data
+            data = (data - np.mean(data)) / (np.std(data) + 1e-6)
+
+            # Decompose, filter, and reconstruct using the WaveletProcessor
+            coeffs = self.wavelet_processor.decompose(data)
+            filtered_coeffs = self.wavelet_processor.filter_coeffs(coeffs)
+            reconstructed_data = self.wavelet_processor.reconstruct(filtered_coeffs)
+            return reconstructed_data
+        except Exception as e:
+            logger.error(f"Error in wavelet processing: {e}")
+            return np.zeros_like(data)
 
 class Visualizer:
     def __init__(self, root):
@@ -165,12 +311,65 @@ class Visualizer:
         base_size = 32
         self.processors = {
             'theta': FrequencyBandProcessor(base_size, (4, 8)),
-            'alpha': FrequencyBandProcessor(base_size * 2, (8, 13)),
-            'beta': FrequencyBandProcessor(base_size * 4, (13, 30)),
-            'gamma': FrequencyBandProcessor(base_size * 8, (30, 100))
+            'alpha': FrequencyBandProcessor(base_size, (8, 13)),
+            'beta': FrequencyBandProcessor(base_size, (13, 30)),
+            'gamma': FrequencyBandProcessor(base_size, (30, 100))
         }
+
         
+        # Initialize the ImageBacktracker (after self.processors is defined)
+        self.image_backtracker = ImageBacktracker(self.processors)
+        
+        # Set up the GUI
         self.setup_gui()
+
+    def process_input_image(self, image_path):
+        """
+        Load an input image, process it through the EEG visualization, and display the backtracked result.
+        """
+        try:
+            # Load the input image
+            image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            if image is None:
+                messagebox.showerror("Error", "Failed to load image.")
+                return
+
+            original_shape = image.shape  # Save original shape
+
+            # Process the image through the backtracking pipeline
+            backtracked_image = self.image_backtracker.process_image(image)
+
+            # Resize backtracked image to the original size
+            backtracked_image = cv2.resize(backtracked_image, (original_shape[1], original_shape[0]))
+
+            # Apply color map for visualization
+            colorized = cv2.applyColorMap(backtracked_image, cv2.COLORMAP_JET)
+
+            # Convert to PhotoImage for display
+            final_image = Image.fromarray(cv2.cvtColor(colorized, cv2.COLOR_BGR2RGB))
+            photo = ImageTk.PhotoImage(image=final_image)
+
+            # Update canvas
+            self.canvas.delete("all")
+            self.canvas.config(width=original_shape[1], height=original_shape[0])
+            self.canvas.create_image(0, 0, image=photo, anchor=tk.NW)
+            self.canvas.image = photo  # Keep reference
+        except Exception as e:
+            logger.error(f"Error processing input image: {e}")
+            messagebox.showerror("Error", "Failed to process input image.")
+
+
+    def load_and_process_image(self):
+        """
+        Opens a file dialog to load an input image and processes it.
+        """
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.process_input_image(file_path)
+
+
     
     def setup_gui(self):
         # Main frames
@@ -180,6 +379,12 @@ class Visualizer:
         viz_frame = ttk.Frame(self.root)
         viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         
+        # Save image
+
+        ttk.Button(control_frame, text="Save Image", command=self.save_image).pack(fill=tk.X, pady=5)
+
+
+
         # Controls
         ttk.Button(control_frame, text="Load EEG", command=self.load_eeg).pack(fill=tk.X, pady=5)
         
@@ -196,6 +401,8 @@ class Visualizer:
         self.play_btn = ttk.Button(controls, text="Play", command=self.toggle_playback)
         self.play_btn.pack(side=tk.LEFT, padx=5)
         
+        ttk.Button(control_frame, text="Process Input Image", command=self.load_and_process_image).pack(fill=tk.X, pady=5)
+
         # Time slider
         self.time_var = tk.DoubleVar(value=0)
         self.time_slider = ttk.Scale(
@@ -261,7 +468,28 @@ class Visualizer:
         # Canvas for visualization
         self.canvas = tk.Canvas(viz_frame, bg='black')
         self.canvas.pack(fill=tk.BOTH, expand=True)
-    
+
+    def save_image(self):
+        """
+        Saves the currently displayed image on the canvas.
+        """
+        try:
+            # Get the current image from the canvas
+            if hasattr(self.canvas, 'image'):
+                save_path = filedialog.asksaveasfilename(
+                    defaultextension=".png",
+                    filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All files", "*.*")]
+                )
+                if save_path:
+                    self.canvas.image._PhotoImage__photo.write(save_path)
+                    messagebox.showinfo("Success", f"Image saved successfully: {save_path}")
+            else:
+                messagebox.showerror("Error", "No image available to save.")
+        except Exception as e:
+            logger.error(f"Error saving image: {e}")
+            messagebox.showerror("Error", "Failed to save the image.")
+
+
     def load_eeg(self):
         filepath = filedialog.askopenfilename(
             filetypes=[("EDF files", "*.edf"), ("All files", "*.*")]
@@ -316,22 +544,26 @@ class Visualizer:
         self.root.after(33, self.update)  # ~30 FPS
     
     def update_visualization(self):
+        """Updates the visualization using wavelet-processed EEG data."""
         if not self.eeg.raw or not self.channel_var.get():
             return
-        
+
         # Get current channel data
         channel_idx = self.eeg.raw.ch_names.index(self.channel_var.get())
         data = self.eeg.get_data(channel_idx, self.state.current_time)
         if data is None:
             return
-        
-        # Process frequency bands
-        band_amplitudes = self.eeg.process_bands(data)
-        
-        # Update each frequency band
+
+        # Apply wavelet processing to the signal
+        wavelet_processed_data = self.eeg.process_with_wavelet(data)
+
+        # Process frequency bands (after wavelet transformation)
+        band_amplitudes = self.eeg.process_bands(wavelet_processed_data)
+
+        # Update each frequency band for visualization
         resolution = 512
         final_image = np.zeros((resolution, resolution))
-        
+
         # Enhanced weights and composition
         weights = {
             'theta': 0.15,  # Slower waves
@@ -340,8 +572,8 @@ class Visualizer:
             'gamma': 0.25   # Fast detail
         }
         dt = 0.033  # ~30 FPS
-        
-        # Process each band and compose
+
+        # Process each band and compose the final image
         band_states = {}
         for band, weight in weights.items():
             processor = self.processors[band]
@@ -349,39 +581,40 @@ class Visualizer:
             resized = cv2.resize(state, (resolution, resolution))
             band_states[band] = resized
             final_image += weight * resized
-        
+
         # Add cross-frequency coupling effects
         alpha_beta_coupling = np.multiply(band_states['alpha'], band_states['beta']) * 0.1
         theta_alpha_coupling = np.multiply(band_states['theta'], band_states['alpha']) * 0.1
         final_image += alpha_beta_coupling + theta_alpha_coupling
-        
+
         # Enhanced normalization and contrast
         final_image = (final_image - final_image.min()) / (final_image.max() - final_image.min() + 1e-8)
         final_image = np.power(final_image, 0.85)  # Gamma correction for better contrast
         final_image = (final_image * 255).astype(np.uint8)
-        
+
         # Advanced visual effects
         # Edge enhancement
         edge_enhanced = cv2.Laplacian(final_image, cv2.CV_64F).astype(np.uint8)
         final_image = cv2.addWeighted(final_image, 0.9, edge_enhanced, 0.1, 0)
-        
+
         # Multi-scale blending
         blur1 = cv2.GaussianBlur(final_image, (3, 3), 0)
         blur2 = cv2.GaussianBlur(final_image, (7, 7), 0)
         final_image = cv2.addWeighted(blur1, 0.6, blur2, 0.4, 0)
-        
+
         # Final colorization with enhanced contrast
         colored = cv2.applyColorMap(final_image, cv2.COLORMAP_JET)
-        
+
         # Convert to PhotoImage and display
         image = Image.fromarray(cv2.cvtColor(colored, cv2.COLOR_BGR2RGB))
         photo = ImageTk.PhotoImage(image=image)
-        
+
         # Update canvas
         self.canvas.delete("all")
         self.canvas.config(width=resolution, height=resolution)
         self.canvas.create_image(0, 0, image=photo, anchor=tk.NW)
         self.canvas.image = photo  # Keep reference
+
 
 def main():
     root = tk.Tk()
