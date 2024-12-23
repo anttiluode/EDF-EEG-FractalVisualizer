@@ -1,5 +1,7 @@
 # EEG Visualizer and Fractal Decoder
 
+![Visualizer Screenshot](visualizer.png)
+
 This project consists of two complementary applications:
 
 ## 1. EEG Visualizer (Fractal Maker)
