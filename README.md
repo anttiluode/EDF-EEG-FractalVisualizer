@@ -1,5 +1,8 @@
 # EDF-EEG-FractalVisualizer
 
+EDIT: 
+Yes, the code makes similar structures out of the temp channel etc too. So the code produces a  lot of the fractal likeness. But the fractals are more complex with eeg data.
+
 ![Visualizer](./visualizer.png)
 
 
