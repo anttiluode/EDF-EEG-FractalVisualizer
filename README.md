@@ -41,3 +41,40 @@ python eeg_visualizer.py
 3. Select a channel from the dropdown
 4. Use the Play/Pause button to control visualization
 5. Adjust sliders to control wave behavior for each frequency band
+
+# What causes the pulse and topology? 
+
+Claude: 
+
+
+Topological Features:
+These emerge from several factors in your code:
+
+Wave pattern generation
+
+radial_wave = np.sin(self.distance - self.phase) * np.exp(-self.distance * 0.15)
+spiral_wave = np.sin(self.distance + self.angle - self.phase) * np.exp(-self.distance * 0.1)
+
+The topological map-like features come from:
+
+The interaction between radial and spiral waves
+The exponential decay terms (exp(-self.distance))
+The cross-frequency coupling between layers
+
+
+Pulse-like Behavior:
+
+What looks like pulsing comes from:
+
+Natural decay and momentum
+
+self.state *= (1 - self.decay_rate * dt)
+self.momentum = 0.95 * self.momentum + 0.05 * (wave - self.state)
+
+This creates a kind of oscillatory behavior where:
+
+The state naturally decays
+
+New input creates momentum
+
+The momentum carries through to create pulse-like effects
