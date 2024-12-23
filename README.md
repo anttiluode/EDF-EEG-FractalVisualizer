@@ -1,80 +1,88 @@
-# EDF-EEG-FractalVisualizer
+# EEG Visualizer and Fractal Decoder
 
-EDIT: 
-Yes, the code makes similar structures out of the temp channel etc too. So the code produces a  lot of the fractal likeness. But the fractals are more complex with eeg data.
+This project consists of two complementary applications:
 
-Claude Pointed out: 
+## 1. EEG Visualizer (Fractal Maker)
 
-These create fractal-like patterns for any input, but:
+A Python application that generates fractal-like visualizations from EEG data or images. It processes different frequency bands and creates dynamic, colorful visualizations that represent the underlying patterns in the data.
 
-With temperature: Shows basic wave dynamics
-With EEG: Reveals complex frequency interactions
+### Features
+- Load and visualize EEG data (.edf files)
+- Process input images into fractal-like patterns
+- Real-time visualization with adjustable parameters
+- Frequency band controls (Theta, Alpha, Beta, Gamma)
+- Adjustable wave speed, decay rate, and coupling strength
+- Save generated visualizations
 
-
-Key Differences:
-
-
-Temperature channel shows smoother gradients
-Activity channel shows more structured boundaries
-EEG shows rapid pattern formation/dissolution
-
-![Visualizer](./visualizer.png)
-
-
-Real-time EEG visualization tool that displays brain wave frequency bands as dynamic wave patterns.
-
-## Installation
-
-Install dependencies:
-```bash
-pip install numpy pillow mne scipy opencv-python etc. 
+### Dependencies
+```
+numpy
+tkinter
+pillow
+mne
+scipy
+opencv-python
+pywt
 ```
 
-## Usage
-
-1. Run the script:
+### Usage
+1. Run the EEG Visualizer:
 ```bash
 python eeg_visualizer.py
 ```
+2. Either:
+   - Load an EEG file (.edf) and select a channel
+   - Process an input image
+3. Adjust the band controls to modify the visualization
+4. Save the generated fractal image
 
-2. Click "Load EEG" to select an EEF file. Wait a while until channel selection becomes available. 
-3. Select a channel from the dropdown
-4. Use the Play/Pause button to control visualization
-5. Adjust sliders to control wave behavior for each frequency band
+## 2. Fractal Decoder
 
-# What causes the pulse and topology? 
+A deep learning-based application that attempts to reverse the fractal transformation process, reconstructing original images from their fractal representations.
 
-Claude: 
+### Features
+- Train on pairs of original and fractalized images
+- Enhanced U-Net architecture with frequency awareness
+- Real-time training visualization
+- Save and load trained models
+- Decode new fractal images
+- Multi-scale reconstruction
 
+### Dependencies
+```
+torch
+torchvision
+pillow
+scikit-learn
+numpy
+tkinter
+```
 
-Topological Features:
-These emerge from several factors in your code:
+### Usage
+1. Run the Fractal Decoder:
+```bash
+python fractal_decoder.py
+```
+2. Load training data:
+   - Add original images
+   - Add corresponding fractalized images
+3. Train the model
+4. Use "Decode Image" to reconstruct original images from fractals
 
-Wave pattern generation
+### Training Tips
+- Start with a small learning rate (0.001)
+- Use paired images (original and their fractal versions)
+- Train for at least 50 epochs
+- Save the model periodically
 
-radial_wave = np.sin(self.distance - self.phase) * np.exp(-self.distance * 0.15)
-spiral_wave = np.sin(self.distance + self.angle - self.phase) * np.exp(-self.distance * 0.1)
+## Note
 
-The topological map-like features come from:
+This project was developed with assistance from Claude (Anthropic) and demonstrates an experimental approach to visualizing and processing EEG data and images using fractal-like transformations.
 
-The interaction between radial and spiral waves
-The exponential decay terms (exp(-self.distance))
-The cross-frequency coupling between layers
+## License
 
+MIT License
 
-Pulse-like Behavior:
+## Acknowledgments
 
-What looks like pulsing comes from:
-
-Natural decay and momentum
-
-self.state *= (1 - self.decay_rate * dt)
-self.momentum = 0.95 * self.momentum + 0.05 * (wave - self.state)
-
-This creates a kind of oscillatory behavior where:
-
-The state naturally decays
-
-New input creates momentum
-
-The momentum carries through to create pulse-like effects
+Special thanks to Claude (Anthropic) for assistance in developing this project.
