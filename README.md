@@ -19,7 +19,7 @@ pip install numpy pillow mne scipy opencv-python
 python eeg_visualizer.py
 ```
 
-2. Click "Load EEG" to select an EEF file
+2. Click "Load EEG" to select an EEF file. Wait a while until channel selection becomes available. 
 3. Select a channel from the dropdown
 4. Use the Play/Pause button to control visualization
 5. Adjust sliders to control wave behavior for each frequency band
