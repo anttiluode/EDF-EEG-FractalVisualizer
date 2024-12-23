@@ -1,5 +1,8 @@
 # EDF-EEG-FractalVisualizer
 
+![Visualizer](./visualizer.png)
+
+
 Real-time EEG visualization tool that displays brain wave frequency bands as dynamic wave patterns.
 
 ## Installation
