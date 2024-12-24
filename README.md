@@ -1,5 +1,7 @@
 # EEG Visualizer and Fractal Decoder
 
+EDIT: I added a tool that can turn a folder full of images to fractals that can then be used to train a model with Fractal Decoder. 
+
 ![Visualizer Screenshot](visualizer.png)
 
 This project consists of two complementary applications:
