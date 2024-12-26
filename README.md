@@ -3,6 +3,9 @@
 EDIT: I added a tool that can turn a folder full of images to fractals that can then be used to train a model with Fractal Decoder
 and also a tool that can make videos out of eeg using the model.
 
+EDIT: Turns out the original system is not true fractal system. I asked Claude to make a true fractal system (not wave based). 
+It did one, but I doubt it will be able to crack this either. But it does have one edge. It is all in one. 
+
 ![Visualizer Screenshot](visualizer.png)
 
 This project consists of two complementary applications:
